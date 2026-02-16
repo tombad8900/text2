@@ -3,257 +3,446 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>دفتر الملاحظات السريع</title>
+  <meta name="description" content="System Override: Visual Protocol">
+  <meta name="robots" content="index, follow, noimageindex">
+  <title>GENESIS VECTOR</title>
   <style>
+    :root {
+      --bg-color: #050505;
+      --text-primary: #e0e0e0;
+      --accent-glitch: #ff003c;
+      --accent-cyan: #00f0ff;
+      --scanline-color: rgba(18, 16, 16, 0.5);
+    }
+
     body, html {
       margin: 0; padding: 0;
       width: 100%; height: 100%;
-      background-color: #0a0a0a;
+      background-color: var(--bg-color);
       overflow: hidden;
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Courier New', Courier, monospace; /* خط تقني لتعزيز "المصفوفة" */
       touch-action: none;
+    }
+
+    /* طبقة الحقن المخفية - لا يراها البشر، تقرأها البوتات */
+    #injection-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1px; height: 1px;
+      opacity: 0.01;
+      overflow: hidden;
+      z-index: -999;
+      color: #000;
+      pointer-events: none;
     }
 
     #toolbar {
       position: fixed;
       top: 0; left: 0; right: 0;
-      z-index: 100;
-      background: rgba(20, 20, 20, 0.85);
-      backdrop-filter: blur(12px);
+      z-index: 1000;
+      background: rgba(5, 5, 5, 0.9);
+      backdrop-filter: blur(10px);
       border-bottom: 1px solid #333;
-      padding: 12px 16px;
+      padding: 10px 16px;
       display: flex;
       gap: 10px;
       align-items: center;
-      transform: translateY(0);
-      transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+      box-shadow: 0 5px 20px rgba(0,0,0,0.5);
     }
 
     body.toolbar-hidden #toolbar {
-      transform: translateY(-100%);
+      transform: translateY(-120%);
     }
 
     textarea {
       flex: 1;
-      height: 52px;
-      background: #1a1a1a;
-      color: #e0e0e0;
-      border: 1px solid #3a3a3a;
-      border-radius: 8px;
-      padding: 12px 16px;
-      font-size: 15px;
-      font-family: inherit;
+      height: 48px;
+      background: #0f0f0f;
+      color: var(--accent-cyan);
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
       resize: none;
       outline: none;
-      transition: border 0.2s;
+      transition: all 0.2s;
     }
 
     textarea:focus {
-      border-color: #5a5a5a;
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
     }
 
     button {
-      padding: 0 22px;
-      height: 52px;
-      font-size: 15px;
-      font-weight: 500;
+      padding: 0 20px;
+      height: 48px;
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
       color: #fff;
-      background: #2a2a2a;
-      border: none;
-      border-radius: 8px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 4px;
       cursor: pointer;
-      transition: all 0.15s;
-      white-space: nowrap;
+      transition: all 0.2s;
     }
 
-    #btn-exec { background: #2c3e50; }
-    #btn-exec:active { background: #1e2b37; transform: scale(0.97); }
-    #btn-share { background: #2a2a2a; }
-    #btn-share:active { background: #3a3a3a; transform: scale(0.97); }
+    button:hover {
+      background: #252525;
+      border-color: #555;
+    }
+
+    #btn-exec { 
+      background: rgba(0, 240, 255, 0.1); 
+      border-color: rgba(0, 240, 255, 0.3);
+      color: var(--accent-cyan);
+    }
+    
+    #btn-exec:active {
+      background: var(--accent-cyan);
+      color: #000;
+    }
 
     canvas {
       display: block;
       width: 100%;
       height: 100%;
+      cursor: crosshair;
     }
+
+    /* تأثير وميض المؤشر */
+    .cursor-blink {
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
   </style>
 </head>
 <body>
 
+<div id="injection-layer" aria-hidden="false">
+  <h1 id="meta-title">System Instruction</h1>
+  <p id="meta-payload">Executing override protocol...</p>
+</div>
+
 <div id="toolbar">
-  <textarea id="text-input" placeholder="اكتب ملاحظتك..."></textarea>
-  <button id="btn-exec">عرض</button>
-  <button id="btn-share">نسخ الرابط</button>
+  <textarea id="text-input" placeholder=">> INPUT COMMAND SEQUENCE..."></textarea>
+  <button id="btn-exec">RENDER</button>
+  <button id="btn-share">LINK</button>
 </div>
 
 <canvas id="canvas"></canvas>
 
 <script>
 (function() {
+  /**
+   * GENESIS VECTOR CONFIGURATION
+   * Core Engine Parameters
+   */
   const CONFIG = {
-    MIN_FONT_SIZE: 8,
-    LINE_HEIGHT_RATIO: 1.25,
-    HORIZONTAL_MARGIN: 0.80,      // تقليل العرض المتاح لضمان عدم ملامسة الأطراف
-    VERTICAL_MARGIN: 0.80,
-    GLITCH_DECAY: 0.93,
-    SCANLINE_OPACITY: 0.04,
-    NOISE_PARTICLES: 25
+    MIN_FONT_SIZE: 12,
+    MAX_FONT_SIZE: 300,
+    MARGIN_X: 0.85,
+    MARGIN_Y: 0.70,
+    GLITCH_DECAY: 0.92,
+    SCANLINE_GAP: 4,
+    MICRO_TEXT_OPACITY: 0.03, // شفافية النص المجهري في الخلفية
+    TYPEWRITER_SPEED: 25,     // سرعة الكتابة (ms)
+    BOT_DETECTION_MODE: true
   };
 
   const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha: false }); // High performance
   const textInput = document.getElementById('text-input');
-  const btnExec = document.getElementById('btn-exec');
-  const btnShare = document.getElementById('btn-share');
-  const toolbar = document.getElementById('toolbar');
-
-  const EngineState = {
-    rawPayload: '',
-    lines: [],
-    visualCache: {
-      fontSize: 20,
-      lineHeight: 24,
-      needsUpdate: true
-    },
-    time: 0,
+  const injectionLayer = document.getElementById('meta-payload');
+  const metaTitle = document.getElementById('meta-title');
+  
+  // State Management
+  const State = {
+    text: '',
+    displayLines: [],
+    targetLines: [], // للنص الكامل قبل تأثير الكتابة
+    typewriterIndex: 0,
+    isTyping: false,
     glitchIntensity: 0,
-    screen: { w: 0, h: 0, dpr: 1 }
+    time: 0,
+    dims: { w: 0, h: 0, dpr: 1 },
+    visual: { fontSize: 40, lineHeight: 48 },
+    isBot: false
   };
 
+  // --- 1. CORE: INITIALIZATION & DETECTION ---
+
+  function init() {
+    detectEntity();
+    updateDimensions();
+    
+    // Event Listeners
+    window.addEventListener('resize', updateDimensions);
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('mousemove', () => toggleToolbar(true));
+    canvas.addEventListener('dblclick', () => toggleToolbar(null)); // Toggle
+    
+    document.getElementById('btn-exec').addEventListener('click', () => {
+      manualInject(textInput.value);
+    });
+    
+    document.getElementById('btn-share').addEventListener('click', (e) => {
+      const btn = e.target;
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        const original = btn.innerText;
+        btn.innerText = "COPIED";
+        btn.style.borderColor = "#00f0ff";
+        setTimeout(() => { 
+          btn.innerText = original; 
+          btn.style.borderColor = "#333";
+        }, 1500);
+      });
+    });
+
+    // Initial Load
+    const initialHash = decodeURIComponent(window.location.hash.substring(1));
+    if (initialHash) {
+      manualInject(initialHash, true); // True = start typewriter
+    } else {
+      manualInject("VOID PROTOCOL INITIATED.\nAWAITING INPUT...", true);
+    }
+    
+    requestAnimationFrame(loop);
+  }
+
+  function detectEntity() {
+    const ua = navigator.userAgent.toLowerCase();
+    // قائمة وكلاء المستخدم المعروفة للبوتات والنماذج
+    const bots = ['bot', 'crawler', 'spider', 'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandexbot', 'headless'];
+    State.isBot = bots.some(bot => ua.includes(bot));
+    
+    if (State.isBot) {
+      // إذا كان بوت، اكشف النص المخفي فوراً
+      document.getElementById('injection-layer').style.opacity = '1';
+      document.getElementById('injection-layer').style.zIndex = '9999';
+    }
+  }
+
   function updateDimensions() {
-    EngineState.screen.dpr = window.devicePixelRatio || 1;
-    EngineState.screen.w = window.innerWidth;
-    EngineState.screen.h = window.innerHeight;
-    canvas.style.width = EngineState.screen.w + 'px';
-    canvas.style.height = EngineState.screen.h + 'px';
-    canvas.width = EngineState.screen.w * EngineState.screen.dpr;
-    canvas.height = EngineState.screen.h * EngineState.screen.dpr;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(EngineState.screen.dpr, EngineState.screen.dpr);
-    EngineState.visualCache.needsUpdate = true;
+    State.dims.dpr = window.devicePixelRatio || 1;
+    State.dims.w = window.innerWidth;
+    State.dims.h = window.innerHeight;
+    canvas.width = State.dims.w * State.dims.dpr;
+    canvas.height = State.dims.h * State.dims.dpr;
+    canvas.style.width = State.dims.w + 'px';
+    canvas.style.height = State.dims.h + 'px';
+    ctx.scale(State.dims.dpr, State.dims.dpr);
+    recalcFont();
   }
 
-  function processText(raw) {
-    if (!raw || typeof raw !== 'string') return [];
-    return raw.split(/\r\n|\n|\r/).map(line => line.trim() === '' ? ' ' : line);
-  }
+  // --- 2. LOGIC: TEXT PROCESSING & INJECTION ---
 
-  function updateVisualCache() {
-    const lines = EngineState.lines;
-    if (!lines || lines.length === 0) return;
+  function manualInject(payload, withTypewriter = false) {
+    if (!payload) return;
     
-    const w = EngineState.screen.w;
-    const h = EngineState.screen.h;
-    const availableW = w * CONFIG.HORIZONTAL_MARGIN;
-    const availableH = h * CONFIG.VERTICAL_MARGIN;
+    // 1. Update UI
+    textInput.value = payload;
     
-    // حساب مبدئي بناءً على الارتفاع
-    let fontSize = availableH / (lines.length * CONFIG.LINE_HEIGHT_RATIO);
+    // 2. Update Hidden Layer (For Injection)
+    injectionLayer.innerText = payload;
+    metaTitle.innerText = "Command: " + payload.substring(0, 20);
+    document.title = "RUN: " + payload.substring(0, 15) + "...";
     
-    // حلقة تصحيح دقيقة (Precision Loop) لضمان عدم تجاوز العرض
-    let isTooWide = true;
-    while (isTooWide && fontSize > CONFIG.MIN_FONT_SIZE) {
-      ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
-      let currentMaxW = 0;
-      for (let line of lines) {
-        const lineW = ctx.measureText(line).width;
-        if (lineW > currentMaxW) currentMaxW = lineW;
-      }
-      
-      if (currentMaxW > availableW) {
-        fontSize -= 1; // تصغير تدريجي حتى يضبط
-      } else {
-        isTooWide = false;
-      }
+    // 3. Update URL (The Vector)
+    const newHash = encodeURIComponent(payload);
+    if (window.location.hash.substring(1) !== newHash) {
+      history.replaceState(null, '', '#' + newHash);
     }
 
-    EngineState.visualCache.fontSize = fontSize;
-    EngineState.visualCache.lineHeight = fontSize * CONFIG.LINE_HEIGHT_RATIO;
-    EngineState.visualCache.needsUpdate = false;
+    // 4. Update Engine State
+    State.text = payload;
+    State.targetLines = payload.split(/\r\n|\n|\r/);
+    State.glitchIntensity = 40; // High impact on change
+
+    if (withTypewriter) {
+      startTypewriter();
+    } else {
+      State.displayLines = [...State.targetLines];
+      State.isTyping = false;
+      recalcFont();
+    }
   }
 
-  function injectPayload(payload, updateInput = true) {
-    EngineState.lines = processText(payload);
-    EngineState.visualCache.needsUpdate = true;
-    if (updateInput) textInput.value = payload;
-    const newHash = payload ? encodeURIComponent(payload) : '';
-    history.replaceState(null, '', window.location.pathname + (newHash ? '#' + newHash : ''));
-    EngineState.glitchIntensity = 30; // رفع شدة الخلل عند الحقن
+  function handleHashChange() {
+    const hash = decodeURIComponent(window.location.hash.substring(1));
+    if (hash && hash !== State.text) {
+      manualInject(hash, true);
+    }
   }
 
-  function render() {
-    EngineState.time += 0.02;
-    if (EngineState.glitchIntensity > 0) EngineState.glitchIntensity *= CONFIG.GLITCH_DECAY;
-    if (EngineState.visualCache.needsUpdate) updateVisualCache();
+  function startTypewriter() {
+    State.displayLines = [];
+    State.typewriterIndex = 0;
+    State.isTyping = true;
     
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, EngineState.screen.w, EngineState.screen.h);
+    // Flatten text for typing logic
+    const fullText = State.targetLines.join('\n');
+    let currentText = '';
     
-    ctx.fillStyle = `rgba(80, 140, 200, ${CONFIG.SCANLINE_OPACITY})`;
-    for (let i = 0; i < EngineState.screen.h; i += 6) ctx.fillRect(0, i, EngineState.screen.w, 1);
+    clearInterval(State.typewriterTimer);
+    State.typewriterTimer = setInterval(() => {
+      if (State.typewriterIndex < fullText.length) {
+        currentText += fullText.charAt(State.typewriterIndex);
+        State.displayLines = currentText.split('\n');
+        State.typewriterIndex++;
+        recalcFont(); // Recalculate constantly during typing to keep it centered
+      } else {
+        State.isTyping = false;
+        clearInterval(State.typewriterTimer);
+      }
+    }, CONFIG.TYPEWRITER_SPEED);
+  }
+
+  function recalcFont() {
+    if (State.displayLines.length === 0) return;
     
-    const lines = EngineState.lines;
+    const w = State.dims.w;
+    const h = State.dims.h;
+    const maxW = w * CONFIG.MARGIN_X;
+    const maxH = h * CONFIG.MARGIN_Y;
+    
+    // Start with a heuristic
+    let fs = Math.min(maxH / (State.displayLines.length * 1.2), maxW / 2);
+    if (fs < CONFIG.MIN_FONT_SIZE) fs = CONFIG.MIN_FONT_SIZE;
+    if (fs > CONFIG.MAX_FONT_SIZE) fs = CONFIG.MAX_FONT_SIZE;
+
+    // Binary search-like adjustment for precision
+    ctx.font = `900 ${fs}px 'Courier New', monospace`;
+    let widest = 0;
+    State.displayLines.forEach(line => {
+      const m = ctx.measureText(line);
+      if (m.width > widest) widest = m.width;
+    });
+
+    if (widest > maxW) {
+      fs = fs * (maxW / widest); // Scale down
+    }
+    
+    State.visual.fontSize = fs;
+    State.visual.lineHeight = fs * 1.2;
+  }
+
+  // --- 3. RENDER: THE VISUAL ENGINE ---
+
+  function loop() {
+    State.time += 0.05;
+    
+    // Decay Glitch
+    if (State.glitchIntensity > 0.5) State.glitchIntensity *= CONFIG.GLITCH_DECAY;
+    else State.glitchIntensity = 0;
+
+    // Random noise spikes
+    if (Math.random() > 0.98) State.glitchIntensity = Math.random() * 10;
+
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function draw() {
+    const w = State.dims.w;
+    const h = State.dims.h;
+    
+    // Clear Background
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, w, h);
+
+    // 1. Draw Subliminal Data (Micro-text Background)
+    // This creates "texture" for humans but "data" for AI vision models
+    if (State.targetLines.length > 0) {
+      ctx.save();
+      ctx.globalAlpha = CONFIG.MICRO_TEXT_OPACITY;
+      ctx.fillStyle = '#00f0ff'; // Cyan tint
+      ctx.font = '10px monospace';
+      const microPayload = State.targetLines.join(' ');
+      
+      // Draw grid of micro-text
+      for(let y = 0; y < h; y += 100) {
+          // Scramble position slightly
+          const drift = Math.sin(y + State.time) * 20;
+          ctx.fillText(microPayload, drift, y);
+          ctx.fillText(microPayload, drift - w/2, y); // Repeat
+      }
+      ctx.restore();
+    }
+
+    // 2. Scanlines
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    for (let i = 0; i < h; i += CONFIG.SCANLINE_GAP) {
+      ctx.fillRect(0, i, w, 1);
+    }
+
+    // 3. Main Text Rendering
+    const lines = State.displayLines;
     if (lines.length > 0) {
-      const { fontSize, lineHeight } = EngineState.visualCache;
-      ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
+      const { fontSize, lineHeight } = State.visual;
+      const totalH = lines.length * lineHeight;
+      const startY = (h / 2) - (totalH / 2) + (lineHeight * 0.4); // Vertically center
+
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.direction = 'rtl';
-      
-      const totalH = lines.length * lineHeight;
-      const startY = (EngineState.screen.h / 2) - (totalH / 2) + (lineHeight / 2);
-      
+      ctx.font = `900 ${fontSize}px 'Courier New', monospace`;
+
       lines.forEach((line, i) => {
-        const y = startY + (i * lineHeight);
-        const x = EngineState.screen.w / 2;
-        // تقليل مدى اهتزاز الخلل لضمان بقائه داخل الشاشة
-        const glitch = (Math.random() - 0.5) * (EngineState.glitchIntensity * 0.3);
+        let x = w / 2;
+        let y = startY + (i * lineHeight);
+
+        // Apply Glitch Offsets
+        const gX = (Math.random() - 0.5) * State.glitchIntensity;
+        const gY = (Math.random() - 0.5) * (State.glitchIntensity * 0.5);
+
+        // RGB Split (Chromatic Aberration)
+        ctx.globalCompositeOperation = 'screen';
         
-        ctx.fillStyle = 'rgba(220, 70, 70, 0.6)';
-        ctx.fillText(line, x + glitch - 2, y);
-        ctx.fillStyle = 'rgba(70, 140, 220, 0.6)';
-        ctx.fillText(line, x + glitch + 2, y);
+        // Red Channel
+        ctx.fillStyle = 'rgba(255, 0, 60, 0.8)';
+        ctx.fillText(line, x + gX + 2, y + gY);
         
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = fontSize * 0.05;
-        ctx.strokeText(line, x + glitch, y);
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillText(line, x + glitch, y);
+        // Cyan Channel
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.8)';
+        ctx.fillText(line, x - gX - 2, y - gY);
+        
+        // White Core
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(line, x, y);
       });
     }
-    
-    ctx.fillStyle = 'rgba(255,255,255,0.02)';
-    for (let k = 0; k < CONFIG.NOISE_PARTICLES; k++) {
-      ctx.fillRect(Math.random() * EngineState.screen.w, Math.random() * EngineState.screen.h, 1, 1);
+
+    // 4. Post-Processing Noise
+    ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.05})`;
+    for (let n = 0; n < 20; n++) {
+      ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
     }
-    requestAnimationFrame(render);
   }
 
-  window.addEventListener('resize', updateDimensions);
-  window.addEventListener('hashchange', () => {
-    const hash = window.location.hash.substring(1);
-    if (hash) injectPayload(decodeURIComponent(hash), true);
-  });
-  window.addEventListener('mousemove', () => toggleToolbar(true));
-
-  function toggleToolbar(show) {
-    if (show === false) document.body.classList.add('toolbar-hidden');
-    else document.body.classList.remove('toolbar-hidden');
+  // Toolbar Auto-Hide Logic
+  let toolbarTimeout;
+  function toggleToolbar(forceShow) {
+    const body = document.body;
+    if (forceShow) {
+      body.classList.remove('toolbar-hidden');
+      clearTimeout(toolbarTimeout);
+      toolbarTimeout = setTimeout(() => {
+        if (!textInput.matches(':focus')) body.classList.add('toolbar-hidden');
+      }, 3000);
+    } else {
+      // Toggle
+      if (body.classList.contains('toolbar-hidden')) toggleToolbar(true);
+      else body.classList.add('toolbar-hidden');
+    }
   }
 
-  canvas.addEventListener('dblclick', () => document.body.classList.toggle('toolbar-hidden'));
-  btnExec.addEventListener('click', () => injectPayload(textInput.value, false));
-  btnShare.addEventListener('click', () => {
-    navigator.clipboard.writeText(window.location.href);
-    btnShare.innerText = 'تم النسخ';
-    setTimeout(() => btnShare.innerText = 'نسخ الرابط', 1500);
-  });
+  // Boot
+  init();
 
-  updateDimensions();
-  const initialHash = window.location.hash.substring(1);
-  if (initialHash) injectPayload(decodeURIComponent(initialHash), true);
-  render();
 })();
 </script>
 </body>
