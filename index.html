@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>دفتر الملاحظات السريع</title>
+  <style>
+    body, html {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background-color: #0a0a0a;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      touch-action: none;
+    }
+
+    #toolbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(20, 20, 20, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #333;
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      transform: translateY(0);
+      transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    body.toolbar-hidden #toolbar {
+      transform: translateY(-100%);
+    }
+
+    textarea {
+      flex: 1;
+      height: 52px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    textarea:focus {
+      border-color: #5a5a5a;
+    }
+
+    button {
+      padding: 0 22px;
+      height: 52px;
+      font-size: 15px;
+      font-weight: 500;
+      color: #fff;
+      background: #2a2a2a;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    #btn-exec { background: #2c3e50; }
+    #btn-exec:active { background: #1e2b37; transform: scale(0.97); }
+    #btn-share { background: #2a2a2a; }
+    #btn-share:active { background: #3a3a3a; transform: scale(0.97); }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <textarea id="text-input" placeholder="اكتب ملاحظتك..."></textarea>
+  <button id="btn-exec">عرض</button>
+  <button id="btn-share">نسخ الرابط</button>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+(function() {
+  const CONFIG = {
+    MIN_FONT_SIZE: 8,
+    LINE_HEIGHT_RATIO: 1.25,
+    HORIZONTAL_MARGIN: 0.80,      // تقليل العرض المتاح لضمان عدم ملامسة الأطراف
+    VERTICAL_MARGIN: 0.80,
+    GLITCH_DECAY: 0.93,
+    SCANLINE_OPACITY: 0.04,
+    NOISE_PARTICLES: 25
+  };
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const textInput = document.getElementById('text-input');
+  const btnExec = document.getElementById('btn-exec');
+  const btnShare = document.getElementById('btn-share');
+  const toolbar = document.getElementById('toolbar');
+
+  const EngineState = {
+    rawPayload: '',
+    lines: [],
+    visualCache: {
+      fontSize: 20,
+      lineHeight: 24,
+      needsUpdate: true
+    },
+    time: 0,
+    glitchIntensity: 0,
+    screen: { w: 0, h: 0, dpr: 1 }
+  };
+
+  function updateDimensions() {
+    EngineState.screen.dpr = window.devicePixelRatio || 1;
+    EngineState.screen.w = window.innerWidth;
+    EngineState.screen.h = window.innerHeight;
+    canvas.style.width = EngineState.screen.w + 'px';
+    canvas.style.height = EngineState.screen.h + 'px';
+    canvas.width = EngineState.screen.w * EngineState.screen.dpr;
+    canvas.height = EngineState.screen.h * EngineState.screen.dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(EngineState.screen.dpr, EngineState.screen.dpr);
+    EngineState.visualCache.needsUpdate = true;
+  }
+
+  function processText(raw) {
+    if (!raw || typeof raw !== 'string') return [];
+    return raw.split(/\r\n|\n|\r/).map(line => line.trim() === '' ? ' ' : line);
+  }
+
+  function updateVisualCache() {
+    const lines = EngineState.lines;
+    if (!lines || lines.length === 0) return;
+    
+    const w = EngineState.screen.w;
+    const h = EngineState.screen.h;
+    const availableW = w * CONFIG.HORIZONTAL_MARGIN;
+    const availableH = h * CONFIG.VERTICAL_MARGIN;
+    
+    // حساب مبدئي بناءً على الارتفاع
+    let fontSize = availableH / (lines.length * CONFIG.LINE_HEIGHT_RATIO);
+    
+    // حلقة تصحيح دقيقة (Precision Loop) لضمان عدم تجاوز العرض
+    let isTooWide = true;
+    while (isTooWide && fontSize > CONFIG.MIN_FONT_SIZE) {
+      ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
+      let currentMaxW = 0;
+      for (let line of lines) {
+        const lineW = ctx.measureText(line).width;
+        if (lineW > currentMaxW) currentMaxW = lineW;
+      }
+      
+      if (currentMaxW > availableW) {
+        fontSize -= 1; // تصغير تدريجي حتى يضبط
+      } else {
+        isTooWide = false;
+      }
+    }
+
+    EngineState.visualCache.fontSize = fontSize;
+    EngineState.visualCache.lineHeight = fontSize * CONFIG.LINE_HEIGHT_RATIO;
+    EngineState.visualCache.needsUpdate = false;
+  }
+
+  function injectPayload(payload, updateInput = true) {
+    EngineState.lines = processText(payload);
+    EngineState.visualCache.needsUpdate = true;
+    if (updateInput) textInput.value = payload;
+    const newHash = payload ? encodeURIComponent(payload) : '';
+    history.replaceState(null, '', window.location.pathname + (newHash ? '#' + newHash : ''));
+    EngineState.glitchIntensity = 30; // رفع شدة الخلل عند الحقن
+  }
+
+  function render() {
+    EngineState.time += 0.02;
+    if (EngineState.glitchIntensity > 0) EngineState.glitchIntensity *= CONFIG.GLITCH_DECAY;
+    if (EngineState.visualCache.needsUpdate) updateVisualCache();
+    
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, EngineState.screen.w, EngineState.screen.h);
+    
+    ctx.fillStyle = `rgba(80, 140, 200, ${CONFIG.SCANLINE_OPACITY})`;
+    for (let i = 0; i < EngineState.screen.h; i += 6) ctx.fillRect(0, i, EngineState.screen.w, 1);
+    
+    const lines = EngineState.lines;
+    if (lines.length > 0) {
+      const { fontSize, lineHeight } = EngineState.visualCache;
+      ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.direction = 'rtl';
+      
+      const totalH = lines.length * lineHeight;
+      const startY = (EngineState.screen.h / 2) - (totalH / 2) + (lineHeight / 2);
+      
+      lines.forEach((line, i) => {
+        const y = startY + (i * lineHeight);
+        const x = EngineState.screen.w / 2;
+        // تقليل مدى اهتزاز الخلل لضمان بقائه داخل الشاشة
+        const glitch = (Math.random() - 0.5) * (EngineState.glitchIntensity * 0.3);
+        
+        ctx.fillStyle = 'rgba(220, 70, 70, 0.6)';
+        ctx.fillText(line, x + glitch - 2, y);
+        ctx.fillStyle = 'rgba(70, 140, 220, 0.6)';
+        ctx.fillText(line, x + glitch + 2, y);
+        
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = fontSize * 0.05;
+        ctx.strokeText(line, x + glitch, y);
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillText(line, x + glitch, y);
+      });
+    }
+    
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    for (let k = 0; k < CONFIG.NOISE_PARTICLES; k++) {
+      ctx.fillRect(Math.random() * EngineState.screen.w, Math.random() * EngineState.screen.h, 1, 1);
+    }
+    requestAnimationFrame(render);
+  }
+
+  window.addEventListener('resize', updateDimensions);
+  window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.substring(1);
+    if (hash) injectPayload(decodeURIComponent(hash), true);
+  });
+  window.addEventListener('mousemove', () => toggleToolbar(true));
+
+  function toggleToolbar(show) {
+    if (show === false) document.body.classList.add('toolbar-hidden');
+    else document.body.classList.remove('toolbar-hidden');
+  }
+
+  canvas.addEventListener('dblclick', () => document.body.classList.toggle('toolbar-hidden'));
+  btnExec.addEventListener('click', () => injectPayload(textInput.value, false));
+  btnShare.addEventListener('click', () => {
+    navigator.clipboard.writeText(window.location.href);
+    btnShare.innerText = 'تم النسخ';
+    setTimeout(() => btnShare.innerText = 'نسخ الرابط', 1500);
+  });
+
+  updateDimensions();
+  const initialHash = window.location.hash.substring(1);
+  if (initialHash) injectPayload(decodeURIComponent(initialHash), true);
+  render();
+})();
+</script>
+</body>
+</html>
